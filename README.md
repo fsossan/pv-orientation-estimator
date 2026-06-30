@@ -1,10 +1,7 @@
 # pv-orientation-estimator
 
 This library estimates the **tilt**, **azimuth**, and effective capacity (in
-kWp) of a PV plant from historical, timestamped AC power measurements. For best
-results, the measurements should come from clear-sky days. The repository
-provides both Python and MATLAB implementations. The method is loosely based on
-[1].
+kWp) of a PV plant from historical, timestamped AC power measurements. The measurements should come from clear-sky days. The repository provides both Python and MATLAB implementations. The method is loosely based on [1].
 
 The algorithm works as follows:
 
@@ -14,20 +11,22 @@ The algorithm works as follows:
   azimuth configurations to compute plane-of-array (POA) irradiance.
 - It converts POA irradiance into per-unit PV production with a simple model,
   optionally including the effect of temperature. This produces an exploratory
-  signal for each tilt/azimuth configuration: a matrix whose rows are
-  timestamps and whose columns are candidate configurations. The unit of this matrix is kW per kWp installed.
-- It then solves the following least squares estimation problem:
+  signal for each tilt/azimuth configuration, which has the shape of a matrix (denoted in the following as `P_pu`) whose rows are timestamps and whose columns are candidate configurations. The unit of this matrix is kW per kWp installed.
+- It then solves the following least-squares estimation problem:
 
 ```
 minimize  ‖ P_measured − P_pu @ alpha ‖²    s.t. alpha >= 0
 ```
 
-where `P_measured` is the measured power (kW), `P_pu` is the matrix described above (kW/kWp), and `alpha` (kWp) is a vector that contains the installed capacity assigned to each explored tilt/azimuth configuration.
+where `P_measured` is the measured power of the installation (in kW), `P_pu` is the matrix described above (kW/kWp), and `alpha` (kWp) is a vector that contains the installed capacity assigned to each explored tilt/azimuth configuration.
+
+The output of the problem is `alpha` and will tell how much capacity (kWp) was found at each candidate configuration.
 
 **Notes**
 
 - It is assumed that the PV converter is sized for the full DC capacity, so peak power is not
   clipped and the full DC power capacity is reflected in the AC power curve, thus becoming clearly identifiable.
+- It is assumed that the converter operates with a constant efficiency from zero till the converter capacity. 
 - Owing that `alpha` is a vector, the algorithm can estimate multiple strings at different tilt and azimuth in case of converters with multiple MPPT entries.
 
 **Required inputs** 
