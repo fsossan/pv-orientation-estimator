@@ -22,18 +22,23 @@ The algorithm works as follows:
 minimize  ‖ P_measured − P_pu @ alpha ‖²    s.t. alpha >= 0
 ```
 
-where `P_measured` is the measured power in kW, `P_pu` is the matrix described above (kW/kWp), and `alpha` (in kWp) is a vector that contains the installed capacity assigned to each explored tilt/azimuth configuration.
+where `P_measured` is the measured power (kW), `P_pu` is the matrix described above (kW/kWp), and `alpha` (kWp) is a vector that contains the installed capacity assigned to each explored tilt/azimuth configuration.
 
-The **required inputs** for the model are:
+**Notes**
 
-- timestamped PV generation measurements
+- It is assumed that the PV converter is sized for the full DC capacity, so peak power is not
+  clipped and the full DC power capacity is reflected in the AC power curve, thus becoming clearly identifiable.
+- Owing that `alpha` is a vector, the algorithm can estimate multiple strings at different tilt and azimuth in case of converters with multiple MPPT entries.
+
+**Required inputs** 
+
+The required inputs for the model are:
+
+- timestamped PV generation measurements (kW)
 - longitude and latitude of the installation
-- optionally, a temperature time series
+- optionally, a temperature time series (deg C)
 
-**Assumptions**:
 
-- The PV converter is sized for the full DC capacity, so peak power is not
-  clipped and the full DC power capacity is reflected in the AC power curve.
 
 The method fits measured AC power to a grid of clear-sky POA reference profiles
 and solves a non-negative least-squares (NNLS) problem for the per-orientation
