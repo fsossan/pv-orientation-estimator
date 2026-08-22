@@ -15,7 +15,7 @@ import pytest
 from pv_orientation_estimator import (
     LAYOUTS,
     DAYTIME_GHI_THRESHOLD,
-    build_reference_matrix,
+    build_pu_power_matrix,
     run_estimation,
     format_results_table,
     alpha_to_heatmap_grid,
@@ -32,7 +32,7 @@ TRUE_CAPACITY = 100.0               # kWp
 
 @pytest.fixture(scope="module")
 def reference():
-    P_pu, ghi = build_reference_matrix(LAT, LON, ELEV, TIMESTAMPS)
+    P_pu, ghi = build_pu_power_matrix(LAT, LON, ELEV, TIMESTAMPS)
     return P_pu, ghi
 
 
@@ -95,7 +95,7 @@ def test_temperature_correction_derates_reference(reference):
     """With a warm ambient temperature the corrected reference is strictly
     below the uncorrected one wherever there is irradiance (gamma < 0)."""
     P_pu, _ = reference
-    P_pu_t, _ = build_reference_matrix(LAT, LON, ELEV, TIMESTAMPS, air_temp=25.0)
+    P_pu_t, _ = build_pu_power_matrix(LAT, LON, ELEV, TIMESTAMPS, air_temp=25.0)
 
     lit = P_pu > 0
     # At T_air = 25 °C, T_cell = 25 + 0.038*POA >= 25, so factor <= 1.
@@ -109,7 +109,7 @@ def test_recovers_orientation_with_temperature_model():
     """If both the synthetic 'measured' power and the reference use the same
     temperature model, the estimator still recovers orientation and STC kWp."""
     air_temp = 20.0  # constant ambient [°C]
-    P_pu, ghi = build_reference_matrix(LAT, LON, ELEV, TIMESTAMPS, air_temp=air_temp)
+    P_pu, ghi = build_pu_power_matrix(LAT, LON, ELEV, TIMESTAMPS, air_temp=air_temp)
 
     idx = _true_index()
     P_measured = P_pu[:, idx] * TRUE_CAPACITY  # generated with the temp model

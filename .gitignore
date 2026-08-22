@@ -9,6 +9,7 @@ dist/
 *.egg-info/
 .eggs/
 
+doc/
 
 *.DS_store
 *.idea
@@ -16,3 +17,14 @@ __pycache__/
 *.py[cod]
 *.pyo
 ~$*
+
+# LaTeX build artefacts (doc/)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
+doc/*.pdf
