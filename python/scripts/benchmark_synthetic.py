@@ -74,7 +74,9 @@ def make(site, stamps, tilt=TILT, az=AZ, kwp=KWP, **kwargs):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-horizon", action="store_true",
-                        help="skip the experiment that downloads a PVGIS horizon")
+                        help="skip the experiments that download a PVGIS horizon")
+    parser.add_argument("--seeds", type=int, default=6,
+                        help="noise realisations averaged in the combined experiment")
     args = parser.parse_args(argv)
 
     stamps = pd.date_range(START, END, freq="1h", tz="UTC")
@@ -147,6 +149,59 @@ def main(argv=None):
         warm, warm_ghi = build_pu_power_matrix(*SITE, stamps, interval="1h",
                                                label="end", air_temp=assumed)
         print(row(name, run_estimation(warm, hot, warm_ghi > DAYTIME_GHI_THRESHOLD)))
+
+    print("\nE9  what each method survives when the mechanism is NOT declared")
+    print("    (100 kWp, no clipping; every case fitted by both methods as-is)")
+    print(f"  {'mechanism':<32}{'method':>7} | {'tilt_c':>7}{'az_c':>7}{'kWp err':>9}")
+    reference = make(SITE, stamps)
+    ramp = np.linspace(0.0, 1.0, len(reference))
+    day_index = (pd.Series(np.arange(len(stamps)), index=stamps)
+                 .groupby(stamps.date).transform("min").to_numpy())
+    outage_days = np.random.default_rng(0).choice(np.unique(day_index), 10, replace=False)
+    for name, measured in (
+            ("clean reference", reference),
+            ("10 % uniform soiling", reference * 0.90),
+            ("soiling ramp 0 to 15 %", reference * (1 - 0.15 * ramp)),
+            ("10 outage days (zeros)", np.where(np.isin(day_index, outage_days),
+                                                0.0, reference)),
+            ("2 % symmetric noise", noisy(reference, 2.0))):
+        for label_, extra in (("A", {"method": "A"}), ("B", {})):
+            result = run_estimation(matrix, measured, daytime, **extra)
+            tilt_c, az_c = centroid(result["alpha"])
+            print(f"  {name:<32}{label_:>7} | {tilt_c:>7.1f}{az_c:>7.1f}"
+                  f"{100*(result['effective_kWp']/KWP-1):>+8.2f}%")
+
+    if not args.skip_horizon:
+        print(f"\nE8  all corrections at once: Wimmis terrain + 75 kVA inverter + hot")
+        print(f"    cells + hourly end-labelled averages; mean |error| over {args.seeds} seeds")
+        print(f"  {'':<28} {'|tilt|':>8} {'|az|':>7} {'|kWp|':>8}")
+        combined = pd.date_range("2023-03-01", "2023-04-25", freq="1h", tz="UTC")
+        horizon = download_horizon(WIMMIS[0], WIMMIS[1])
+        hours = np.asarray(combined.hour, dtype=float)
+        day_of_year = np.asarray(combined.dayofyear, dtype=float)
+        ambient = (14.0 + 6.0 * np.sin(2 * np.pi * (day_of_year - 100) / 365)
+                   + 7.0 * np.sin(2 * np.pi * (hours - 9) / 24))
+        clean = synthetic_plant(*WIMMIS, combined, TILT, AZ, KWP, interval="1h",
+                                label="end", horizon=horizon, ac_rating=75.0,
+                                air_temp=ambient)
+        # The recommended dictionary: interval declared, cells modelled, terrain in.
+        full, full_ghi = build_pu_power_matrix(*WIMMIS, combined, interval="1h",
+                                               label="end", air_temp=25.0, horizon=horizon)
+        lit = full_ghi > DAYTIME_GHI_THRESHOLD
+        for pct in (1.0, 2.0, 4.0):
+            errors = {m: [] for m in ("A", "A1", "B")}
+            for seed in range(args.seeds):
+                measured = noisy(clean, pct, seed=seed)
+                for name, extra in (("A", {}), ("A1", {"ac_rating": 75.0}),
+                                    ("B", {"ac_rating": 75.0})):
+                    result = run_estimation(full, measured, lit, method=name, **extra)
+                    tilt_c, az_c = centroid(result["alpha"])
+                    errors[name].append((abs(tilt_c - TILT), abs(az_c - AZ),
+                                         abs(result["effective_kWp"] - KWP)))
+            for name in ("A", "A1", "B"):
+                mean = np.array(errors[name]).mean(axis=0)
+                print(f"  noise {pct:.0f} %, method {name:<12} {mean[0]:>8.1f}° "
+                      f"{mean[1]:>6.1f}° {mean[2]:>8.1f}")
 
     print("\nE6  inverter clipping, 100 kWp behind 75 kVA (DC/AC 1.33)")
     print("    A estimates the rating; A1 and B are given it"); print(HEAD)

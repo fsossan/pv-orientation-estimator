@@ -76,6 +76,7 @@ def synthetic_plant(
     seed: int = 0,
     horizon: Optional[HorizonProfile] = None,
     ac_rating: Optional[float] = None,
+    cutoff_kw: Optional[float] = None,
     air_temp: Optional[Union[float, np.ndarray]] = None,
 ) -> np.ndarray:
     """
@@ -99,13 +100,19 @@ def synthetic_plant(
     flat top of a clipped array.  Clipping is applied before the noise, since
     the meter sees the clipped signal.
 
+    ``cutoff_kw`` [kW] is the power below which the inverter does not start:
+    instantaneous production below it is lost, which truncates the morning and
+    evening shoulders.  Like the clipping it is applied to the sub-samples,
+    before they are averaged, so an interval that straddles the cut-in comes
+    out partly truncated.
+
     ``air_temp`` [°C] makes the cells heat up and derate, following the same
     Eqs. (6)-(7) the dictionary uses — a scalar or a series of length T.  Real
     arrays always do this, so it is the way to generate measurements the plain
     dictionary does *not* explain.
     """
     view_factor = None if horizon is None else sky_view_factor(horizon, tilt, az_eu)
-    args = (tilt, az_eu, capacity_kwp, horizon, view_factor, air_temp)
+    args = (tilt, az_eu, capacity_kwp, horizon, view_factor, air_temp, cutoff_kw)
 
     if interval is None:
         power = _plant_power(lat, lon, elev, timestamps, *args)
@@ -357,6 +364,7 @@ def _plant_power(
     horizon: Optional[HorizonProfile] = None,
     view_factor: Optional[float] = None,
     air_temp: Optional[Union[float, np.ndarray]] = None,
+    cutoff_kw: Optional[float] = None,
 ) -> np.ndarray:
     """Instantaneous clear-sky AC power [kW] of one orientation."""
     location = pvlib.location.Location(latitude=lat, longitude=lon, altitude=elev)
@@ -387,7 +395,10 @@ def _plant_power(
     if air_temp is not None:                                   # Eqs. (6)-(7)
         cell = np.asarray(air_temp, dtype=float) + TEMP_RISE_COEFF_DEFAULT * poa
         per_unit = per_unit * (1.0 + GAMMA_DEFAULT * (cell - TEMP_REF_C))
-    return per_unit * capacity_kwp
+    power = per_unit * capacity_kwp
+    if cutoff_kw is not None:
+        power = np.where(power < float(cutoff_kw), 0.0, power)   # inverter asleep
+    return power
 
 
 if __name__ == "__main__":

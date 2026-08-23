@@ -30,6 +30,7 @@ import pandas as pd
 
 from pv_orientation_estimator.estimate import (
     CLIP_BAND,
+    CUTOFF_BAND,
     EstimationResult,
     run_estimation,
 )
@@ -68,6 +69,8 @@ def estimate_orientation(
     method: Optional[str] = None,
     ac_rating: Optional[Union[float, str]] = None,
     clip_band: float = CLIP_BAND,
+    cutoff_kw: Optional[float] = None,
+    cutoff_band: float = CUTOFF_BAND,
 ) -> EstimationResult:
     """
     Estimate a plant's tilt, azimuth and capacity from its measured AC power.
@@ -91,7 +94,8 @@ def estimate_orientation(
     plant model is weak at the low irradiance shade leaves behind.
 
     ``method``, ``ac_rating`` and ``clip_band`` handle a plant whose DC
-    capacity exceeds its inverter rating; see
+    capacity exceeds its inverter rating, and ``cutoff_kw`` the power below
+    which the inverter does not start; see
     :func:`~pv_orientation_estimator.estimate.run_estimation`.
 
     Returns the same :class:`~pv_orientation_estimator.estimate.EstimationResult`
@@ -115,7 +119,8 @@ def estimate_orientation(
         usable = usable & (shaded <= max_shaded_fraction)
 
     return run_estimation(P_pu, power, usable, method=method,
-                          ac_rating=ac_rating, clip_band=clip_band)
+                          ac_rating=ac_rating, clip_band=clip_band,
+                          cutoff_kw=cutoff_kw, cutoff_band=cutoff_band)
 
 
 def _as_series(

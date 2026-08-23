@@ -87,6 +87,13 @@ CLIP_TOLERANCE = 0.02
 # (2 % noise needs 6 %), while an over-wide band costs only ~1 % of capacity.
 CLIP_BAND = 0.06
 
+# An interval that straddles the inverter's cut-in averages *above* it while
+# still being partly truncated, so censoring only the readings below the bare
+# cut-in leaves a bias.  Measured on plants of 2-5 kWp with a 0.5 kW cut-in:
+# censoring below twice the cut-in removes it entirely, and going wider costs
+# nothing but samples.
+CUTOFF_BAND = 2.0
+
 # --- constants of the plateau detector (see detect_ac_rating) --------------
 # A clipped plant piles samples up at one power level.  The detector looks for
 # that atom in the histogram of daytime power, then checks the level really is
@@ -117,6 +124,8 @@ class EstimationResult(TypedDict, total=False):
     method: Optional[str]        # clipping model used: None, "A", "A1" or "B"
     ac_rating_kw: Optional[float]  # AC rating the fit clipped at, or None
     clipped_share: float         # share of daytime samples treated as clipped
+    cutoff_kw: Optional[float]   # inverter cut-in power [kW], or None
+    cutoff_share: float          # share of daytime samples below the cut-in
     dc_ac_ratio: Optional[float]  # effective_kWp / ac_rating_kw, or None
 
 
@@ -208,6 +217,8 @@ def run_estimation(
     method: Optional[str] = None,
     ac_rating: Optional[Union[float, str]] = None,
     clip_band: float = CLIP_BAND,
+    cutoff_kw: Optional[float] = None,
+    cutoff_band: float = CUTOFF_BAND,
 ) -> EstimationResult:
     """
     Solve NNLS on daytime-filtered data:
@@ -253,6 +264,45 @@ def run_estimation(
     observed, the DC capacity is only weakly bounded from above and comes out
     1-3 % high.
 
+    Inverter cut-in
+    ---------------
+    ``cutoff_kw`` is the power below which the inverter does not start.  Those
+    readings are *left-censored*, the mirror of a clipped one: a zero says the
+    array produced **less** than the cut-in, not that it produced nothing.  The
+    samples below it therefore enter one-sidedly too, penalising the model only
+    for predicting *more* than the cut-in::
+
+        Σ_below max(0, (P_pu α)_t − cutoff)²
+
+    It matters only when the cut-in is a noticeable share of the capacity.
+    With a 0.5 kW cut-in and the standard daytime mask, measured bias against
+    a planted 30° tilt:
+
+    ==========  ==============  ==================
+    capacity    cut-in/capacity  tilt if ignored
+    ==========  ==============  ==================
+    100 kWp     0.005           30.0° (nothing)
+    20 kWp      0.025           30.0° (nothing)
+    5 kWp       0.10            32.8°
+    3 kWp       0.17            39.3°
+    2 kWp       0.25            52.4°
+    ==========  ==============  ==================
+
+    Truncating the shoulders makes the daily profile look narrower, which reads
+    as a steeper array.
+
+    ``cutoff_band`` widens the censored set to ``cutoff_band * cutoff_kw``,
+    because an interval that straddles the cut-in averages above it while still
+    being partly truncated.  The default of :data:`CUTOFF_BAND` removes the
+    bias completely on plants where it is visible at all; censoring the bare
+    cut-in alone leaves roughly half of it.
+
+    **Outages look identical and must be removed first.**  A zero in the middle
+    of a sunny day is a fault, a curtailment or snow, not a cut-in, and fitting
+    it as a cut-in tells the model the array is small.  ``cutoff_share`` in the
+    result reports how many samples were treated this way; on a plant where the
+    cut-in is a small fraction of capacity it should be a few percent at most.
+
     Returns an :class:`EstimationResult`.
     """
     method = _resolve_method(method, ac_rating)
@@ -274,6 +324,10 @@ def run_estimation(
             # inverter caps the model too — so ask only that the DC production
             # reach the rating there.
             target = P_meas_dt if rating is None else np.minimum(P_meas_dt, rating)
+        if cutoff_kw is not None:
+            # Nothing is known below the cut-in beyond "less than this", so a
+            # covering constraint there would be covering a zero.
+            target = np.where(P_meas_dt < float(cutoff_kw) * cutoff_band, 0.0, target)
         prob = cp.Problem(cp.Minimize(cp.sum(alpha)), [P_pu_dt @ alpha >= target])
     else:
         rating = (detect_ac_rating(P_meas_dt) if ac_rating == "auto"
@@ -281,11 +335,26 @@ def run_estimation(
         clipped = (np.zeros(len(P_meas_dt), dtype=bool) if rating is None
                    else P_meas_dt >= rating * (1.0 - clip_band))
 
-        residual = cp.sum_squares(P_meas_dt[~clipped] - P_pu_dt[~clipped] @ alpha)
+        below = (np.zeros(len(P_meas_dt), dtype=bool) if cutoff_kw is None
+                 else P_meas_dt < float(cutoff_kw) * cutoff_band)
+        free = ~clipped & ~below
+        if not free.any():
+            raise ValueError(
+                "every daytime sample was censored, leaving nothing to fit: "
+                f"{clipped.sum()} at the rating and {below.sum()} below the "
+                "cut-in.  Check ac_rating / cutoff_kw against the data."
+            )
+
+        residual = cp.sum_squares(P_meas_dt[free] - P_pu_dt[free] @ alpha)
         if clipped.any():
             # One-sided: only under-prediction at a censored sample is an error.
             residual = residual + cp.sum_squares(
                 cp.pos(rating - P_pu_dt[clipped] @ alpha))
+        if below.any():
+            # Mirror image: the inverter was off, so the model must not predict
+            # more than the cut-in there — but may predict anything less.
+            residual = residual + cp.sum_squares(
+                cp.pos(P_pu_dt[below] @ alpha - float(cutoff_kw) * cutoff_band))
         prob = cp.Problem(cp.Minimize(residual))
 
     prob.solve(solver=cp.CLARABEL)
@@ -298,6 +367,8 @@ def run_estimation(
     # Fit quality on daytime points, against what the meter would have seen:
     # the modelled DC production after the inverter cuts it at the rating.
     P_fitted = P_pu_dt @ a if rating is None else np.minimum(P_pu_dt @ a, rating)
+    if cutoff_kw is not None:
+        P_fitted = np.where(P_fitted < float(cutoff_kw), 0.0, P_fitted)
     ss_res   = float(np.sum((P_meas_dt - P_fitted) ** 2))
     ss_tot   = float(np.sum((P_meas_dt - P_meas_dt.mean()) ** 2))
     r2       = 1.0 - ss_res / ss_tot if ss_tot > 0 else float("nan")
@@ -320,5 +391,8 @@ def run_estimation(
         "ac_rating_kw":  rating,
         "clipped_share": (0.0 if rating is None else
                           float((P_meas_dt >= rating * (1.0 - clip_band)).mean())),
+        "cutoff_kw":     None if cutoff_kw is None else float(cutoff_kw),
+        "cutoff_share":  (0.0 if cutoff_kw is None else
+                          float((P_meas_dt < float(cutoff_kw) * cutoff_band).mean())),
         "dc_ac_ratio":   None if rating in (None, 0.0) else float(a.sum() / rating),
     }

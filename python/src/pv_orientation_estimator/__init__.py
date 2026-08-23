@@ -47,7 +47,12 @@ from pv_orientation_estimator.reference import (
     TEMP_RISE_COEFF_DEFAULT,
     TEMP_REF_C,
 )
-from pv_orientation_estimator.estimate import EstimationResult, run_estimation
+from pv_orientation_estimator.estimate import (
+    CLIP_BAND,
+    CUTOFF_BAND,
+    EstimationResult,
+    run_estimation,
+)
 from pv_orientation_estimator.pipeline import estimate_orientation
 from pv_orientation_estimator.demo import demo_estimate, plot_estimate, synthetic_plant
 from pv_orientation_estimator.geocode import (
@@ -89,6 +94,8 @@ __all__ = [
     "estimate_orientation",
     "run_estimation",
     "EstimationResult",
+    "CLIP_BAND",
+    "CUTOFF_BAND",
     # post-processing
     "format_results_table",
     "alpha_to_heatmap_grid",

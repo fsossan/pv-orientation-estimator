@@ -366,6 +366,46 @@ DC/AC ≥ 1.1 up to ~2 % noise (level within 4 %), misses milder or noisier
 clipping, and errs towards "no clipping" — a missed detection leaves the plain
 fit, an invented one would censor a real peak.
 
+### Inverter cut-in (the system does not start below X kW)
+
+An inverter needs a minimum input to start. A zero reading is then
+**left-censored** — the mirror of a clipped one: it says the array produced
+*less* than the cut-in, not that it produced nothing. Those samples enter the
+objective one-sidedly too, penalising the model only for predicting *more*
+than the cut-in:
+
+```
+Σ_below max(0, (P_pu α)_t − cutoff)²
+```
+
+```python
+result = run_estimation(P_pu, P_measured, daytime, cutoff_kw=0.5)
+result["cutoff_share"]     # fraction of daytime samples treated this way
+```
+
+**It only matters when the cut-in is a noticeable share of the capacity.** With
+a 0.5 kW cut-in and the standard 50 W/m² daytime mask, planted 30° tilt:
+
+| capacity | cut-in ÷ capacity | samples touched | tilt if ignored | with `cutoff_kw` |
+|---|---|---|---|---|
+| 100 kWp | 0.005 | 0.0 % | 30.0° | 30.0° |
+| 5 kWp | 0.10 | 17.7 % | 32.8° | **30.0°** |
+| 3 kWp | 0.17 | 23.1 % | 39.3° | **30.0°** |
+| 2 kWp | 0.25 | 25.8 % | **52.4°** (+9.7 % capacity) | **30.0°** (+0.02 %) |
+
+So it is safe to ignore on commercial plants and necessary on small residential
+ones. The bias has a consistent direction: truncating the shoulders makes the
+daily profile look narrower, which reads as a *steeper* array.
+
+`cutoff_band` (default 2.0) widens the censored set to `2 × cutoff_kw`, because
+an interval straddling the cut-in averages above it while still being partly
+truncated — censoring the bare cut-in alone leaves about half the bias.
+
+**Outages look identical and must be removed first.** A zero in the middle of a
+sunny day is a fault, curtailment or snow, not a cut-in, and fitting it as one
+tells the model the array is small. Watch `cutoff_share`: on a plant where the
+cut-in is a small fraction of capacity it should be a few percent at most.
+
 ### Result schema (`EstimationResult`)
 
 | key             | meaning                                              |
@@ -383,6 +423,8 @@ fit, an invented one would censor a real peak.
 | `ac_rating_kw`  | AC rating the fit clipped at, or `None`              |
 | `clipped_share` | share of daytime samples treated as censored          |
 | `dc_ac_ratio`   | `effective_kWp / ac_rating_kw`, or `None`           |
+| `cutoff_kw`     | inverter cut-in power, or `None`                     |
+| `cutoff_share`  | share of daytime samples below the cut-in            |
 
 On solver failure only `status` and `alpha` (`None`) are populated.
 
