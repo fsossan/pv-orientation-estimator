@@ -31,12 +31,17 @@ Or in two stages, when the dictionary is worth reusing::
 from __future__ import annotations
 
 from pv_orientation_estimator.grid import (
+    AZIMUTH_RANGE,
     AZIMUTHS_EU_DEG,
     DAYTIME_GHI_THRESHOLD,
+    DEFAULT_TARGET,
     LAYOUT_LABELS,
     LAYOUTS,
     N_LAYOUTS,
+    RECTANGULAR_LAYOUTS,
+    TILT_RANGE,
     TILTS_DEG,
+    deserno_layouts,
 )
 from pv_orientation_estimator.reference import (
     build_pu_power_matrix,
@@ -78,6 +83,11 @@ __all__ = [
     # grid
     "TILTS_DEG",
     "AZIMUTHS_EU_DEG",
+    "RECTANGULAR_LAYOUTS",
+    "deserno_layouts",
+    "DEFAULT_TARGET",
+    "TILT_RANGE",
+    "AZIMUTH_RANGE",
     "LAYOUTS",
     "LAYOUT_LABELS",
     "N_LAYOUTS",
