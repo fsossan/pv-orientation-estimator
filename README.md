@@ -1,7 +1,7 @@
 # pv-orientation-estimator
 
 This library estimates the **tilt**, **azimuth**, and effective capacity (in
-kWp) of a PV plant from historical, timestamped AC power measurements. The measurements should come from clear-sky days. The repository provides both Python and MATLAB implementations. The method is loosely based on [1].
+kWp) of a PV plant from historical, timestamped AC power measurements. The measurements should come from clear-sky days. The method is loosely based on [1].
 
 The algorithm works as follows:
 
@@ -70,13 +70,12 @@ cd doc && make      # -> doc/algorithm.pdf
 ## Implementation
 
 This repo ships **two independent, self-contained implementations** of the same
-method, in separate folders. Both MATLAB and Python have external requirements,
+method. Python has external requirements,
 listed below.
 
 | Folder | Language | Requirements | Convex solver | Irradiance model | Notes |
 |--------|----------|--------------|---------------|------------------|-------|
 | [`python/`](python/) | Python | Python >= 3.10; `numpy`, `pandas`, `pvlib`, `cvxpy` | [cvxpy](https://www.cvxpy.org/) | [pvlib](https://pvlib-python.readthedocs.io/) | Installable package `pv_orientation_estimator`; consumed by the enso service-portal. |
-| [`matlab/`](matlab/) | MATLAB | MATLAB R2016b or newer; [CVX](https://cvxr.com/cvx/) | [CVX](https://cvxr.com/cvx/) | self-contained (Ineichen clearsky + NOAA solar position + isotropic transposition) | `+pvorient` package; run `demo_roundtrip.m`. |
 
 Both estimate over the same orientation grid — tilt `0:5:75°` (16 values) and
 azimuth `−50:5:45°` relative to south, EU convention (20 values) — i.e. 320
@@ -112,10 +111,6 @@ meaning as the **STC nominal capacity** `P_nom` (kWp).
 ```python
 # Python
 P_pu, ghi = build_pu_power_matrix(lat, lon, elev, timestamps, air_temp=t_ambient)
-```
-```matlab
-% MATLAB
-[Ppu, ghi] = pvorient.buildReferenceMatrix(lat, lon, elev, times, 'AirTemp', Tair);
 ```
 
 ## Inverter clipping (kWp > kVA)
@@ -214,9 +209,6 @@ geometry, estimate it back, plot the fit:
 
 ```bash
 cd python && python scripts/demo_estimate.py     # Python
-```
-```matlab
-cd matlab, demo_roundtrip                        % MATLAB
 ```
 
 See each folder's `README.md` for install and usage details.

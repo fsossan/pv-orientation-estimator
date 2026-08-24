@@ -56,7 +56,9 @@ def test_demo_recovers_the_synthetic_plant():
                            interval="1h", label="end", noise_pct=2.0, plot=False)
 
     assert result["alpha"] is not None
-    assert result["best_tilt"] == 30
-    assert result["best_az_eu"] == -20
+    # The planted 30 deg is not a grid point: the dictionary samples the
+    # sphere, so recovery lands on the nearest plane it holds.
+    assert abs(result["best_tilt"] - 30) <= 12
+    assert abs(result["best_az_eu"] - (-20)) <= 26   # one azimuth step
     assert result["effective_kWp"] == pytest.approx(100.0, rel=0.05)
     assert result["r2"] > 0.99

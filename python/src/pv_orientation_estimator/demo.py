@@ -207,8 +207,8 @@ def demo_estimate(
 
     print(f"estimate   : tilt {result['best_tilt']}°, azimuth {result['best_az_eu']}° "
           f"(EU), {result['effective_kWp']:.1f} kWp")
-    print(f"error      : tilt {result['best_tilt']-tilt:+d}°, "
-          f"azimuth {result['best_az_eu']-az_eu:+d}°, "
+    print(f"error      : tilt {result['best_tilt']-tilt:+g}°, "
+          f"azimuth {result['best_az_eu']-az_eu:+g}°, "
           f"capacity {100*(result['effective_kWp']/capacity_kwp - 1):+.1f} %")
     print(f"fit        : R² {result['r2']:.5f}, RMSE {result['rmse_kw']:.3f} kW")
     print("\ncapacity by orientation (> 1 % of total):")
@@ -242,8 +242,8 @@ def demo_estimate(
         blind = run_estimation(blind_matrix, measured, daytime)
         if blind["alpha"] is not None:
             print(f"\nsame data, horizon ignored in the dictionary:")
-            print(f"  tilt {blind['best_tilt']}° ({blind['best_tilt']-tilt:+d}), "
-                  f"azimuth {blind['best_az_eu']}° ({blind['best_az_eu']-az_eu:+d}), "
+            print(f"  tilt {blind['best_tilt']}° ({blind['best_tilt']-tilt:+g}), "
+                  f"azimuth {blind['best_az_eu']}° ({blind['best_az_eu']-az_eu:+g}), "
                   f"{blind['effective_kWp']:.1f} kWp "
                   f"({100*(blind['effective_kWp']/capacity_kwp - 1):+.1f} %), "
                   f"R² {blind['r2']:.5f}")

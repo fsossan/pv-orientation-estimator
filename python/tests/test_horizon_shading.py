@@ -155,9 +155,14 @@ def test_modelling_the_horizon_beats_ignoring_it():
     with_terrain = run_estimation(aware, measured, daytime)
     without = run_estimation(blind, measured, daytime)
 
-    assert with_terrain["best_tilt"] == tilt
-    assert with_terrain["best_az_eu"] == az_eu
-    assert with_terrain["effective_kWp"] == pytest.approx(capacity, rel=1e-3)
+    # 30 deg is not a grid point — the dictionary samples the sphere.
+    assert abs(with_terrain["best_tilt"] - tilt) <= 12
+    assert abs(with_terrain["best_az_eu"] - az_eu) <= 26   # one azimuth step
+    # Exact capacity recovery needs the plant to sit *on* a grid point. This
+    # one does not, so the fit spreads over neighbouring planes and the
+    # total carries the residual — 0.5 % here, against 0.1 % when the
+    # planted orientation was a Cartesian grid node.
+    assert with_terrain["effective_kWp"] == pytest.approx(capacity, rel=1e-2)
     assert with_terrain["r2"] > without["r2"]
     assert abs(without["effective_kWp"] - capacity) > \
            abs(with_terrain["effective_kWp"] - capacity)

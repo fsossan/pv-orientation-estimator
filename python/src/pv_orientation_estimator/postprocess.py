@@ -30,13 +30,24 @@ def format_results_table(alpha: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("capacity_kwp", ascending=False).reset_index(drop=True)
 
 
-def alpha_to_heatmap_grid(alpha: np.ndarray) -> tuple[np.ndarray, list[int], list[int]]:
+def alpha_to_heatmap_grid(alpha: np.ndarray) -> tuple[np.ndarray, list[float], list[float]]:
     """
-    Reshape alpha (N_LAYOUTS,) into a 2D grid (n_tilts × n_azimuths_eu)
-    for a heatmap.  Returns (grid, tilts, azimuths_eu).
+    Arrange alpha (N_LAYOUTS,) on a tilt x azimuth grid for a heatmap.
+
+    Returns ``(grid, tilts, azimuths_eu)`` with the axes taken from the layouts
+    actually searched. The default grid is equidistributed over the hemisphere
+    rather than a Cartesian product, so most cells of the rectangle it spans
+    have no layout behind them: those come back as ``NaN``, which a heatmap
+    should draw as a gap (``hoverongaps=False``) rather than as zero capacity.
+    Reshaping instead of scattering would silently mis-place every value the
+    moment the grid stopped being rectangular.
     """
-    n_tilts = len(TILTS_DEG)
-    n_azs   = len(AZIMUTHS_EU_DEG)
-    # LAYOUTS ordering: az is outer loop, tilt is inner loop
-    grid = alpha.reshape(n_azs, n_tilts).T  # (tilts, azimuth_eu)
-    return grid, TILTS_DEG, AZIMUTHS_EU_DEG
+    tilts = sorted({t for t, _ in LAYOUTS})
+    azimuths = sorted({a for _, a in LAYOUTS})
+    row = {t: i for i, t in enumerate(tilts)}
+    col = {a: k for k, a in enumerate(azimuths)}
+
+    grid = np.full((len(tilts), len(azimuths)), np.nan)
+    for value, (tilt, azimuth) in zip(np.asarray(alpha, dtype=float), LAYOUTS):
+        grid[row[tilt], col[azimuth]] = value
+    return grid, tilts, azimuths

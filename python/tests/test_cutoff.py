@@ -19,7 +19,17 @@ from pv_orientation_estimator import (
 from pv_orientation_estimator.demo import synthetic_plant
 
 LAT, LON, ELEV = 46.52, 6.63, 500.0
-TILT, AZ, CUTOFF = 30, -20, 0.5
+
+from pv_orientation_estimator.grid import LAYOUTS as _LAYOUTS
+
+_ON_GRID = next(l for l in _LAYOUTS if l[1] == 0.0 and 20 < l[0] < 50)
+
+# The planted orientation must be one the grid actually contains: the
+# dictionary samples the sphere, so round degrees are not on it. Taken
+# from LAYOUTS rather than written out, so it follows the grid if the
+# sampling changes.
+TILT, AZ = _ON_GRID
+CUTOFF = 0.5
 STAMPS = pd.date_range("2023-05-01", "2023-06-20", freq="1h", tz="UTC")
 
 
